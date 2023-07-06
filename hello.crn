@@ -1,0 +1,7 @@
+
+def Hello(name):
+    f = NewFile("main")
+    f.Func().Id("main").Params().Block(
+        Qual("fmt", "Println").Call("Hello " + name + " !"),
+    )
+    f.Save("hello_"+ name +".go")
