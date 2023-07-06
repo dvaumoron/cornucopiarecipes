@@ -1,9 +1,7 @@
 
 def Hello(name="world"):
-    name = name.strip()
-
     f = NewFile("main")
     f.Func().Id("main").Params().Block(
-        Qual("fmt", "Println").Call(" ".join(["Hello", name , "!"])),
+        Qual("fmt", "Println").Call(" ".join(["Hello", name.strip() , "!"])),
     )
     f.Save("hello.go")
