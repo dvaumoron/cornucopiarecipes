@@ -1,5 +1,7 @@
 
 def Hello(name):
+    name = name.strip()
+
     f = NewFile("main")
     f.Func().Id("main").Params().Block(
         Qual("fmt", "Println").Call("Hello " + name + " !"),
