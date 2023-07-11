@@ -1,0 +1,113 @@
+
+DEFER_CANCEL = Defer().Id("cancel").Call()
+DEFER_ROWS_CLOSE = Defer().Id("rows").Dot("Close").Call()
+IF_ERR_NOT__NIL = If(Err().Op("!=").Nil()).Block(
+    Return(Nil(), Err())
+)
+FOR_ROWS_SCAN = For(Id("rows").Dot("Next").Call()).Block(
+    Err().Op("=").Id("rows").Dot("Scan").Call(Op("&").Id("value")),
+    IF_ERR_NOT__NIL,
+    Id("res").Op("=").Append(Id("res"), Id("value")),
+)
+RETURN_RES = Return(Id("res"), Nil()),
+
+def computeQueryParams(inputTypes):
+    funcParams = [Id("pool").Op("*").Qual("database/sql", "DB"), Id("ctx").Qual("context", "Context")]
+    callParams = [Id("ctx"), query]
+    for k, v in inputTypes:
+        funcParams.append(Id(k).Add(v))
+        callParams.append(Qual("database/sql", "Named").Call(k, Id(k)))
+    return funcParams, callParams
+
+def ConverterFunc(f, name, inputTypes, outputType):
+    funcParams = []
+    structParams = {}
+    for k, v in inputTypes:
+        funcParams.append(Id(k).Add(v))
+        structParams[Id(k)], Id(k)
+
+    f.Func().Id(name).Params().Add(outputType).Block(
+        Return(outputType.Clone().Values(structParams))
+    )
+
+def SimpleResultQueryFunc(f, name, timeOutSec, query, inputTypes, outputType):
+    funcParams, callParams = computeQueryParams(inputTypes)
+
+    f.Func().Id(name).Params(*funcParams).Parens(outputType, Error()).Block(
+        List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Lit(timeOutSec).Op("*").Qual("time", "Second"))
+        DEFER_CANCEL,
+        Line(),
+        Var().Id("value").Add(outputType),
+        Err().Op(":=").Id("pool").Dot("QueryRowContext").Call(*callParams).Dot("Scan").Call(Op("&").Id("value")),
+        Return(Id("value"), Err()),
+    )
+
+def MultiSimpleResultQueryFunc(f, name, timeOutSec, query, inputTypes, outputType):
+    funcParams, callParams = computeQueryParams(inputTypes)
+
+    f.Func().Id(name).Params(*funcParams).Parens(outputType, Error()).Block(
+        List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Lit(timeOutSec).Op("*").Qual("time", "Second"))
+        DEFER_CANCEL,
+        Line(),
+        Var().Id("value").Add(outputType),
+        List(Id("rows"), Err()).Op(":=").Id("pool").Dot("QueryContext").Call(*callParams),
+        IF_ERR_NOT__NILL, DEFER_ROWS_CLOSE,
+        Line(),
+
+        Id("res").Op(":=").Op("[]").Add(outputType).Values(),
+        FOR_ROWS_SCAN, RETURN_RES,
+    )
+
+def ConvertedResultQueryFunc(f, name, timeOutSec, query, inputTypes, queryResultType, converter, outputType):
+    funcParams, callParams = computeQueryParams(inputTypes)
+
+    instructions =  [
+        List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Lit(timeOutSec).Op("*").Qual("time", "Second")),
+        DEFER_CANCEL,
+        Line(),
+    ]
+
+    callParams2 = []
+    callParams3 = []
+    for k, v in queryResultType:
+        instructions.append(Var().Id(k).Add(v))
+        callParams2.append(Op("&").Id(k))
+        callParams3.append(Id(k))
+
+    instructions.append(Err().Op(":=").Id("pool").Dot("QueryRowContext").Call(*callParams).Dot("Scan").Call(*callParams2))
+    instructions.append(Return(converter.Clone().Call(*callParams3), Err()))
+
+    f.Func().Id(name).Params(*funcParams).Parens(outputType, Error()).Block(*instructions)
+
+def MultiConvertedResultQueryFunc(f, name, timeOutSec, query, inputTypes, queryResultType, converter, outputType):
+    funcParams, callParams = computeQueryParams(inputTypes)
+
+    instructions =  [
+        List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Lit(timeOutSec).Op("*").Qual("time", "Second")),
+        DEFER_CANCEL,
+        Line(),
+    ]
+
+    callParams2 = []
+    callParams3 = []
+    for k, v in queryResultType:
+        instructions.append(Var().Id(k).Add(v))
+        callParams2.append(Op("&").Id(k))
+        callParams3.append(Id(k))
+
+    instructions.append(List(Id("rows"), Err()).Op(":=").Id("pool").Dot("QueryContext").Call(*callParams)
+    instructions.append(IF_ERR_NOT__NILL)
+    instructions.append(DEFER_ROWS_CLOSE)
+    instructions.append(Line())
+
+    instructions.append(Id("res").Op(":=").Op("[]").Add(outputType).Values())
+    instructions.append(For(Id("rows").Dot("Next").Call()).Block(
+        Err().Op(":=").Id("rows").Dot("Scan").Call(*callParams2)),
+        IF_ERR_NOT__NIL,
+        Id("res").Op("=").Append(Id("res"), converter.Clone().Call(*callParams3)),
+    ))
+    instructions.append(RETURN_RES)
+
+    f.Func().Id(name).Params(*funcParams).Parens(outputType, Error()).Block(*instructions)
+
+# TODO ExecFunc
