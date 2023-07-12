@@ -9,7 +9,7 @@ FOR_ROWS_SCAN = For(Id("rows").Dot("Next").Call()).Block(
     IF_ERR_NOT_NIL,
     Id("res").Op("=").Append(Id("res"), Id("value")),
 )
-RETURN_RES = Return(Id("res"), Nil()),
+RETURN_RES = Return(Id("res"), Nil())
 IF_ERR_NOT_NIL_ZERO = If(Err().Op("!=").Nil()).Block(
     Return(0, Err())
 )
