@@ -33,7 +33,10 @@ def ConverterFunc(f, name, inputTypes, outputType):
         Return(outputType.Clone().Values(structParams))
     )
 
-def RowQueryerContext(f):
+def RowQueryerContext(f, name):
+    f.Type().Id(name).Interface(
+        Id("QueryRowContext").Parens(Id("ctx").Qual("context", "Context", Id("query").String(), Id("args").Op("...").Any()) *Row),
+    )
     pass # TODO
 
 def SimpleResultQueryFunc(f, name, timeOutSec, query, poolType, inputTypes, outputType):
