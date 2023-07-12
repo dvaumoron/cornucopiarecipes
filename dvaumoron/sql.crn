@@ -1,18 +1,21 @@
 
 DEFER_CANCEL = Defer().Id("cancel").Call()
 DEFER_ROWS_CLOSE = Defer().Id("rows").Dot("Close").Call()
-IF_ERR_NOT__NIL = If(Err().Op("!=").Nil()).Block(
+IF_ERR_NOT_NIL = If(Err().Op("!=").Nil()).Block(
     Return(Nil(), Err())
 )
 FOR_ROWS_SCAN = For(Id("rows").Dot("Next").Call()).Block(
     Err().Op("=").Id("rows").Dot("Scan").Call(Op("&").Id("value")),
-    IF_ERR_NOT__NIL,
+    IF_ERR_NOT_NIL,
     Id("res").Op("=").Append(Id("res"), Id("value")),
 )
 RETURN_RES = Return(Id("res"), Nil()),
+IF_ERR_NOT_NIL_ZERO = If(Err().Op("!=").Nil()).Block(
+    Return(0, Err())
+)
 
-def computeQueryParams(inputTypes):
-    funcParams = [Id("pool").Op("*").Qual("database/sql", "DB"), Id("ctx").Qual("context", "Context")]
+def computeQueryParams(poolType, inputTypes):
+    funcParams = [Id("pool").Add(poolType), Id("ctx").Qual("context", "Context")]
     callParams = [Id("ctx"), query]
     for k, v in inputTypes:
         funcParams.append(Id(k).Add(v))
@@ -30,8 +33,11 @@ def ConverterFunc(f, name, inputTypes, outputType):
         Return(outputType.Clone().Values(structParams))
     )
 
-def SimpleResultQueryFunc(f, name, timeOutSec, query, inputTypes, outputType):
-    funcParams, callParams = computeQueryParams(inputTypes)
+def RowQueryerContext(f):
+    pass # TODO
+
+def SimpleResultQueryFunc(f, name, timeOutSec, query, poolType, inputTypes, outputType):
+    funcParams, callParams = computeQueryParams(poolType, inputTypes)
 
     f.Func().Id(name).Params(*funcParams).Parens(outputType, Error()).Block(
         List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Lit(timeOutSec).Op("*").Qual("time", "Second"))
@@ -43,7 +49,7 @@ def SimpleResultQueryFunc(f, name, timeOutSec, query, inputTypes, outputType):
     )
 
 def MultiSimpleResultQueryFunc(f, name, timeOutSec, query, inputTypes, outputType):
-    funcParams, callParams = computeQueryParams(inputTypes)
+    funcParams, callParams = computeQueryParams(Qual("database/sql/driver", "QueryerContext"), inputTypes)
 
     f.Func().Id(name).Params(*funcParams).Parens(outputType, Error()).Block(
         List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Lit(timeOutSec).Op("*").Qual("time", "Second"))
@@ -51,15 +57,15 @@ def MultiSimpleResultQueryFunc(f, name, timeOutSec, query, inputTypes, outputTyp
         Line(),
         Var().Id("value").Add(outputType),
         List(Id("rows"), Err()).Op(":=").Id("pool").Dot("QueryContext").Call(*callParams),
-        IF_ERR_NOT__NILL, DEFER_ROWS_CLOSE,
+        IF_ERR_NOT_NILL, DEFER_ROWS_CLOSE,
         Line(),
 
         Id("res").Op(":=").Op("[]").Add(outputType).Values(),
         FOR_ROWS_SCAN, RETURN_RES,
     )
 
-def ConvertedResultQueryFunc(f, name, timeOutSec, query, inputTypes, queryResultType, converter, outputType):
-    funcParams, callParams = computeQueryParams(inputTypes)
+def ConvertedResultQueryFunc(f, name, timeOutSec, query, poolType, inputTypes, queryResultType, converter, outputType):
+    funcParams, callParams = computeQueryParams(poolType, inputTypes)
 
     instructions =  [
         List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Lit(timeOutSec).Op("*").Qual("time", "Second")),
@@ -80,7 +86,7 @@ def ConvertedResultQueryFunc(f, name, timeOutSec, query, inputTypes, queryResult
     f.Func().Id(name).Params(*funcParams).Parens(outputType, Error()).Block(*instructions)
 
 def MultiConvertedResultQueryFunc(f, name, timeOutSec, query, inputTypes, queryResultType, converter, outputType):
-    funcParams, callParams = computeQueryParams(inputTypes)
+    funcParams, callParams = computeQueryParams(Qual("database/sql/driver", "QueryerContext"), inputTypes)
 
     instructions =  [
         List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Lit(timeOutSec).Op("*").Qual("time", "Second")),
@@ -110,4 +116,15 @@ def MultiConvertedResultQueryFunc(f, name, timeOutSec, query, inputTypes, queryR
 
     f.Func().Id(name).Params(*funcParams).Parens(outputType, Error()).Block(*instructions)
 
-# TODO ExecFunc
+def ExecFunc(f, name, timeOutSec, query, inputTypes):
+    funcParams, callParams = computeQueryParams(Qual("database/sql/driver", "ExecerContext"), inputTypes)
+
+    f.Func().Id(name).Params(*funcParams).Parens(Int64(), Error()).Block(
+        List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Lit(timeOutSec).Op("*").Qual("time", "Second")),
+        DEFER_CANCEL,
+        Line(),
+
+        List(Id("result"), Err()).Op(":=").Id("pool").Dot("ExecContext").Call(*callParams),
+        IF_ERR_NOT_NIL_ZERO,
+        Return(Id("result").Dot("RowsAffected").Call()),
+    )
