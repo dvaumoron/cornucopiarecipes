@@ -35,9 +35,8 @@ def ConverterFunc(f, name, inputTypes, outputType):
 
 def RowQueryerContext(f, name):
     f.Type().Id(name).Interface(
-        Id("QueryRowContext").Parens(Id("ctx").Qual("context", "Context", Id("query").String(), Id("args").Op("...").Any()) *Row),
+        Id("QueryRowContext").Parens(Id("ctx").Qual("context", "Context", Id("query").String(), Id("args").Op("...").Any())).Op("*").Qual("database/sql", "Row"),
     )
-    pass # TODO
 
 def SimpleResultQueryFunc(f, name, timeOutSec, query, poolType, inputTypes, outputType):
     funcParams, callParams = computeQueryParams(poolType, inputTypes)
