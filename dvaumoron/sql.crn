@@ -18,7 +18,7 @@ IF_ERR_NOT_NIL_ZERO = If(Err().Op("!=").Nil()).Block(
 def computeQueryParams(query, poolType, inputTypes):
     funcParams = [Id("pool").Add(poolType), Id("ctx").Qual("context", "Context")]
     callParams = [Id("ctx"), query]
-    for k, v in inputTypes:
+    for k, v in inputTypes.items():
         funcParams.append(Id(k).Add(v))
         callParams.append(Qual("database/sql", "Named").Call(k, Id(k)))
     return funcParams, callParams
@@ -29,7 +29,7 @@ def addTimeOut(timeOutSec):
 def ConverterFunc(f, name, inputTypes, outputType):
     funcParams = []
     structParams = {}
-    for k, v in inputTypes:
+    for k, v in inputTypes.items():
         funcParams.append(Id(k).Add(v))
         structParams[Id(k)] = Id(k)
 
@@ -81,7 +81,7 @@ def ConvertedResultQueryFunc(f, name, timeOutSec, query, poolType, inputTypes, q
 
     callParams2 = []
     callParams3 = []
-    for k, v in queryResultType:
+    for k, v in queryResultType.items():
         instructions.append(Var().Id(k).Add(v))
         callParams2.append(Op("&").Id(k))
         callParams3.append(Id(k))
@@ -102,7 +102,7 @@ def MultiConvertedResultQueryFunc(f, name, timeOutSec, query, inputTypes, queryR
 
     callParams2 = []
     callParams3 = []
-    for k, v in queryResultType:
+    for k, v in queryResultType.items():
         instructions.append(Var().Id(k).Add(v))
         callParams2.append(Op("&").Id(k))
         callParams3.append(Id(k))
