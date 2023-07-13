@@ -1,0 +1,29 @@
+
+def StructType(file, name, *, embeddedFields, namedFields):
+    fields = list(embeddedFields)
+    for k, v in namedFields.items():
+        fields.append(Id(k).Add(v))
+
+    file.Type().Id(name).Struct(*fields)
+
+def computeTypeParams(inputTypes):
+    funcParams = []
+    structParams = {}
+    for k, v in inputTypes.items():
+        funcParams.append(Id(k).Add(v))
+        structParams[Id(k)] = Id(k)
+    return funcParams, structParams
+
+def MakeFunc(file, name, inputTypes, outputType):
+    funcParams, structParams = computeTypeParams(inputTypes)
+
+    file.Func().Id(name).Params(*funcParams).Add(outputType).Block(
+        Return(outputType.Clone().Values(structParams))
+    )
+
+def NewFunc(file, name, inputTypes, outputType):
+    funcParams, structParams = computeTypeParams(inputTypes)
+
+    file.Func().Id(name).Params(*funcParams).Op(*).Add(outputType).Block(
+        Return(Op("&").Add(outputType).Values(structParams))
+    )
