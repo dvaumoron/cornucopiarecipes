@@ -115,7 +115,7 @@ def ExecFunc(file, name, timeOutSec, query, inputTypes):
     funcParams, callParams = computeQueryParams(query, Qual("database/sql/driver", "ExecerContext"), inputTypes)
 
     file.Func().Id(name).Params(*funcParams).Parens(List(Int64(), Error())).Block(
-        List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Lit(timeOutSec).Op("*").Qual("time", "Second")),
+        addTimeOut(timeOutSec),
         DEFER_CANCEL,
         Line(),
 
