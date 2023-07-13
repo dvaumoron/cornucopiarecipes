@@ -1,5 +1,5 @@
 
-def StructType(file, name, *, embeddedFields, namedFields):
+def StructType(file, name, *, embeddedFields=[], namedFields={}):
     fields = list(embeddedFields)
     for k, v in namedFields.items():
         fields.append(Id(k).Add(v))
@@ -24,6 +24,6 @@ def MakeFunc(file, name, inputTypes, outputType):
 def NewFunc(file, name, inputTypes, outputType):
     funcParams, structParams = computeTypeParams(inputTypes)
 
-    file.Func().Id(name).Params(*funcParams).Op(*).Add(outputType).Block(
+    file.Func().Id(name).Params(*funcParams).Op("*").Add(outputType).Block(
         Return(Op("&").Add(outputType).Values(structParams))
     )
