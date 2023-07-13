@@ -1,5 +1,7 @@
 
+QUERY_METHOD = Id("QueryContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Parens(List(Op("*").Qual("database/sql", "Rows"), Error()))
 QUERY_ROW_METHOD = Id("QueryRowContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Op("*").Qual("database/sql", "Row")
+EXEC_METHOD = Id("QueryRowContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Parens(List(Qual("database/sql", "Result"), Error()))
 DEFER_CANCEL = Defer().Id("cancel").Call()
 DEFER_ROWS_CLOSE = Defer().Id("rows").Dot("Close").Call()
 IF_ERR_NOT_NIL = If(Err().Op("!=").Nil()).Block(
@@ -26,9 +28,19 @@ def computeQueryParams(query, poolType, inputTypes):
 def addTimeOut(timeOutSec):
     return List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), Qual("time", "Duration").Call(timeOutSec).Op("*").Qual("time", "Second"))
 
+def QueryerContext(file, name):
+    file.Type().Id(name).Interface(
+        QUERY_METHOD,
+    )
+
 def RowQueryerContext(file, name):
     file.Type().Id(name).Interface(
         QUERY_ROW_METHOD,
+    )
+
+def ExecerContext(file, name):
+    file.Type().Id(name).Interface(
+        EXEC_METHOD,
     )
 
 def SimpleResultQueryFunc(file, name, timeOutSec, query, poolType, inputTypes, outputType):
@@ -43,8 +55,8 @@ def SimpleResultQueryFunc(file, name, timeOutSec, query, poolType, inputTypes, o
         Return(Id("value"), Err()),
     )
 
-def MultiSimpleResultQueryFunc(file, name, timeOutSec, query, inputTypes, outputType):
-    funcParams, callParams = computeQueryParams(query, Qual("database/sql/driver", "QueryerContext"), inputTypes)
+def MultiSimpleResultQueryFunc(file, name, timeOutSec, query, poolType, inputTypes, outputType):
+    funcParams, callParams = computeQueryParams(query, poolType, inputTypes)
 
     file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(
         addTimeOut(timeOutSec),
@@ -80,8 +92,8 @@ def ConvertedResultQueryFunc(file, name, timeOutSec, query, poolType, inputTypes
 
     file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(*instructions)
 
-def MultiConvertedResultQueryFunc(file, name, timeOutSec, query, inputTypes, queryResultType, converter, outputType):
-    funcParams, callParams = computeQueryParams(query, Qual("database/sql/driver", "QueryerContext"), inputTypes)
+def MultiConvertedResultQueryFunc(file, name, timeOutSec, query, poolType, inputTypes, queryResultType, converter, outputType):
+    funcParams, callParams = computeQueryParams(query, poolType, inputTypes)
 
     instructions =  [
         addTimeOut(timeOutSec),
@@ -111,8 +123,8 @@ def MultiConvertedResultQueryFunc(file, name, timeOutSec, query, inputTypes, que
 
     file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(*instructions)
 
-def ExecFunc(file, name, timeOutSec, query, inputTypes):
-    funcParams, callParams = computeQueryParams(query, Qual("database/sql/driver", "ExecerContext"), inputTypes)
+def ExecFunc(file, name, timeOutSec, query, poolType, inputTypes):
+    funcParams, callParams = computeQueryParams(query, poolType, inputTypes)
 
     file.Func().Id(name).Params(*funcParams).Parens(List(Int64(), Error())).Block(
         addTimeOut(timeOutSec),
