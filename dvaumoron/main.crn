@@ -10,8 +10,9 @@ def computeTypeParams(inputTypes):
     funcParams = []
     structParams = {}
     for k, v in inputTypes.items():
-        funcParams.append(Id(k).Add(v))
-        structParams[Id(k)] = Id(k)
+        kLower = k.lower()
+        funcParams.append(Id(kLower).Add(v))
+        structParams[Id(k)] = Id(kLower)
     return funcParams, structParams
 
 def MakeFunc(file, name, inputTypes, outputType):
