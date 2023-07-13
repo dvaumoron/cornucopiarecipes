@@ -1,7 +1,7 @@
 
 QUERY_METHOD = Id("QueryContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Parens(List(Op("*").Qual("database/sql", "Rows"), Error()))
 QUERY_ROW_METHOD = Id("QueryRowContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Op("*").Qual("database/sql", "Row")
-EXEC_METHOD = Id("QueryRowContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Parens(List(Qual("database/sql", "Result"), Error()))
+EXEC_METHOD = Id("ExecContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Parens(List(Qual("database/sql", "Result"), Error()))
 DEFER_CANCEL = Defer().Id("cancel").Call()
 DEFER_ROWS_CLOSE = Defer().Id("rows").Dot("Close").Call()
 IF_ERR_NOT_NIL = If(Err().Op("!=").Nil()).Block(
