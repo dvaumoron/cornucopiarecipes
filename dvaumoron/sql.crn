@@ -1,4 +1,6 @@
 
+load("dvaumoron/main.crn", "StructType", "MakeFunc", "NewFunc")
+
 QUERY_METHOD = Id("QueryContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Parens(List(Op("*").Qual("database/sql", "Rows"), Error()))
 QUERY_ROW_METHOD = Id("QueryRowContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Op("*").Qual("database/sql", "Row")
 EXEC_METHOD = Id("ExecContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Parens(List(Qual("database/sql", "Result"), Error()))
@@ -27,6 +29,82 @@ def computeQueryParams(query, poolType, inputTypes):
 
 def addTimeOut(timeOutDuration):
     return List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), timeOutDuration)
+
+def createQuery(typeName, fields):
+    queryBuilder = ["insert into "]
+    queryBuilder.append(typeName.lower())
+    queryBuilder.append("s(")
+    first = True
+    for field in fields:
+        if first:
+            first = False
+        else:
+            queryBuilder.append(", ")
+        queryBuilder.append(field.lower())
+    queryBuilder.append(") values(")
+    first = True
+    for field in fields:
+        if first:
+            first = False
+        else:
+            queryBuilder.append(", ")
+        queryBuilder.append(":")
+        queryBuilder.append(field)
+    queryBuilder.append(");")
+    return "".join(queryBuilder)
+
+def readQuery(typeName, fields, primaryKey):
+    primaryKey = primaryKey.lower()
+    queryBuilder = ["select "]
+    first = True
+    for field in fields:
+        if first:
+            first = False
+        else:
+            queryBuilder.append(", ")
+        queryBuilder.append("o.")
+        queryBuilder.append(field.lower())
+    queryBuilder.append(" from ")
+    queryBuilder.append(typeName.lower())
+    queryBuilder.append("s as o where o.")
+    queryBuilder.append(primaryKey)
+    queryBuilder.append(" = :")
+    queryBuilder.append(primaryKey)
+    queryBuilder.append(";")
+    return "".join(queryBuilder)
+
+def updateQuery(typeName, fields, primaryKey):
+    queryBuilder = ["update "]
+    queryBuilder.append(typeName.lower())
+    queryBuilder.append("s set ")
+    first = True
+    for field in fields:
+        if field == primaryKey:
+            continue
+        if first:
+            first = False
+        else:
+            queryBuilder.append(", ")
+        queryBuilder.append(field.lower())
+        queryBuilder.append(" = :")
+        queryBuilder.append(field)
+    queryBuilder.append(" where ")
+    queryBuilder.append(primaryKey.lower())
+    queryBuilder.append(" = :")
+    queryBuilder.append(primaryKey)
+    queryBuilder.append(";")
+    return "".join(queryBuilder)
+
+def deleteQuery(typeName, primaryKey):
+    primaryKey = primaryKey.lower()
+    queryBuilder = ["delete from "]
+    queryBuilder.append(typeName.lower())
+    queryBuilder.append("s where ")
+    queryBuilder.append(primaryKey)
+    queryBuilder.append(" = :")
+    queryBuilder.append(primaryKey)
+    queryBuilder.append(";")
+    return "".join(queryBuilder)
 
 def QueryerContext(file, name):
     file.Type().Id(name).Interface(
@@ -134,4 +212,81 @@ def ExecFunc(file, name, timeOutDuration, query, poolType, inputTypes):
         List(Id("result"), Err()).Op(":=").Id("pool").Dot("ExecContext").Call(*callParams),
         IF_ERR_NOT_NIL_ZERO,
         Return(Id("result").Dot("RowsAffected").Call()),
+    )
+
+def CRUD(file, typeName, *, pointer=False, fields, primaryKey, timeOutDuration, execerContext, rowQueryerContext):
+    StructType(file, typeName, namedFields=fields)
+
+    if pointer:
+        builderName = "New" + typeName
+        outputType = Op("*").Id(typeName)
+        NewFunc(file, builderName, fields, Id(typeName))
+    else:
+        builderName = "Make" + typeName
+        outputType = Id(typeName)
+        MakeFunc(file, builderName, fields, outputType)    
+
+    file.Line()
+
+    createName = "create" + typeName
+    createParams = [Id("pool"), Id("ctx")]
+    for field in fields:
+        createParams.append(Id("o").Dot(field))
+
+    file.Func().Parens(Id("o").Add(outputType)).Id("Create").Params(Id("pool").Add(execerContext), Id("ctx").Qual("context", "Context")).Error().Block(
+        List(Id("_"), Err()).Op(":=").Id(createName).Call(*createParams),
+        Return(Err())
+    )
+
+    file.Line()
+
+    primaryField = {primaryKey.lower(): fields[primaryKey]}
+
+    ConvertedResultQueryFunc(
+        file, name="Read" + typeName, timeOutDuration=timeOutDuration,
+        query=readQuery(typeName, fields, primaryKey),
+        poolType=rowQueryerContext, inputTypes=primaryField, queryResultType=fields,
+        converter=Id(builderName), outputType=outputType,
+    )
+
+    file.Line()
+
+    updateName = "update" + typeName
+
+    file.Func().Parens(Id("o").Add(outputType)).Id("Update").Params(Id("pool").Add(execerContext), Id("ctx").Qual("context", "Context")).Error().Block(
+        List(Id("_"), Err()).Op(":=").Id(updateName).Call(*createParams),
+        Return(Err())
+    )
+
+    file.Line()
+
+    deleteName = "delete" + typeName
+
+    file.Func().Parens(Id("o").Add(outputType)).Id("Delete").Params(Id("pool").Add(execerContext), Id("ctx").Qual("context", "Context")).Error().Block(
+        List(Id("_"), Err()).Op(":=").Id(deleteName).Call(Id("pool"), Id("ctx"), Id("o").Dot(primaryKey)),
+        Return(Err())
+    )
+
+    file.Line()
+
+    ExecFunc(
+        file, name=createName, timeOutDuration=timeOutDuration,
+        query=createQuery(typeName, fields),
+        poolType=execerContext, inputTypes=fields,
+    )
+
+    file.Line()
+
+    ExecFunc(
+        file, name=updateName, timeOutDuration=timeOutDuration,
+        query=updateQuery(typeName, fields, primaryKey),
+        poolType=execerContext, inputTypes=fields,
+    )
+
+    file.Line()
+
+    ExecFunc(
+        file, name=deleteName, timeOutDuration=timeOutDuration,
+        query=deleteQuery(typeName, primaryKey),
+        poolType=execerContext, inputTypes=primaryField,
     )
