@@ -136,7 +136,7 @@ def SimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inputTyp
 def MultiSimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inputTypes, outputType):
     funcParams, callParams = computeQueryParams(query, poolType, inputTypes)
 
-    file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(
+    file.Func().Id(name).Params(*funcParams).Parens(List(Op("[]").Add(outputType), Error())).Block(
         addTimeOut(timeOutDuration),
         DEFER_CANCEL,
         Line(),
@@ -199,7 +199,7 @@ def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, poolType, 
     ))
     instructions.append(RETURN_RES)
 
-    file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(*instructions)
+    file.Func().Id(name).Params(*funcParams).Parens(List(Op("[]").Add(outputType), Error())).Block(*instructions)
 
 def ExecFunc(file, name, timeOutDuration, query, poolType, inputTypes):
     funcParams, callParams = computeQueryParams(query, poolType, inputTypes)
@@ -291,12 +291,14 @@ def CRUD(file, typeName, *, pointer=False, fields, primaryKey, timeOutDuration, 
         poolType=execerContext, inputTypes=primaryField,
     )
 
-def ForeignKeyMethod(file, receiverType, *, multi=True, methodName, functionName, foreignKey, outputType, rowQueryerContext):
+    return outputType, builderName
+
+def ForeignKeyMethod(file, receiverType, *, multi=True, methodName, functionName, foreignKey, outputType, queryerContext):
     if multi:
         outputType = Op("[]").Add(outputType)
     else:
         outputType = outputType.Clone()
 
-    file.Func().Parens(Id("o").Add(receiverType)).Id(methodName).Params(Id("pool").Add(rowQueryerContext), Id("ctx").Qual("context", "Context")).Parens(List(outputType , Error())).Block(
+    file.Func().Parens(Id("o").Add(receiverType)).Id(methodName).Params(Id("pool").Add(queryerContext), Id("ctx").Qual("context", "Context")).Parens(List(outputType , Error())).Block(
         Return(Id(functionName).Call(Id("pool"), Id("ctx"), Id("o").Dot(foreignKey)))
     )
