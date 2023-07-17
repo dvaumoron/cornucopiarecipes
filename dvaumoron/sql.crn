@@ -290,3 +290,13 @@ def CRUD(file, typeName, *, pointer=False, fields, primaryKey, timeOutDuration, 
         query=deleteQuery(typeName, primaryKey),
         poolType=execerContext, inputTypes=primaryField,
     )
+
+def ForeignKeyMethod(file, receiverType, *, multi=True, methodName, functionName, foreignKey, outputType, rowQueryerContext):
+    if multi:
+        outputType = Op("[]").Add(outputType)
+    else:
+        outputType = outputType.Clone()
+
+    file.Func().Parens(Id("o").Add(receiverType)).Id(methodName).Params(Id("pool").Add(rowQueryerContext), Id("ctx").Qual("context", "Context")).Parens(List(outputType , Error())).Block(
+        Return(Id(functionName).Call(Id("pool"), Id("ctx"), Id("o").Dot(foreignKey)))
+    )
