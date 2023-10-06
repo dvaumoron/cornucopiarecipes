@@ -25,11 +25,11 @@ IF_ERR_NOT_NIL = If(Err().Op("!=").Nil()).Block(
     Return(Nil(), Err()),
 )
 FOR_ROWS_SCAN = For(Id("rows").Dot("Next").Call()).Block(
-    Err().Op("=").Id("rows").Dot("Scan").Call(Op("&").Id("value")),
+    Err().Op("=").Id("rows").Dot("Scan").Call(Op("&").Id("valueTemp")),
     IF_ERR_NOT_NIL,
-    Id("res").Op("=").Append(Id("res"), Id("value")),
+    Id("results").Op("=").Append(Id("results"), Id("valueTemp")),
 )
-RETURN_RES = Return(Id("res"), Nil())
+RETURN_RESULTS = Return(Id("results"), Nil())
 IF_ERR_NOT_NIL_ZERO = If(Err().Op("!=").Nil()).Block(
     Return(0, Err()),
 )
@@ -169,9 +169,9 @@ def SimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inputFie
         addTimeOut(timeOutDuration),
         DEFER_CANCEL,
         Line(),
-        Var().Id("value").Add(outputType),
-        Err().Op(":=").Id("pool").Dot("QueryRowContext").Call(*callParams).Dot("Scan").Call(Op("&").Id("value")),
-        Return(Id("value"), Err()),
+        Var().Id("valueTemp").Add(outputType),
+        Err().Op(":=").Id("pool").Dot("QueryRowContext").Call(*callParams).Dot("Scan").Call(Op("&").Id("valueTemp")),
+        Return(Id("valueTemp"), Err()),
     )
 
 def MultiSimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inputFields, outputType):
@@ -181,13 +181,13 @@ def MultiSimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inp
         addTimeOut(timeOutDuration),
         DEFER_CANCEL,
         Line(),
-        Var().Id("value").Add(outputType),
+        Var().Id("valueTemp").Add(outputType),
         List(Id("rows"), Err()).Op(":=").Id("pool").Dot("QueryContext").Call(*callParams),
         IF_ERR_NOT_NIL, DEFER_ROWS_CLOSE,
         Line(),
 
-        Id("res").Op(":=").Op("[]").Add(outputType).Values(),
-        FOR_ROWS_SCAN, RETURN_RES,
+        Id("results").Op(":=").Op("[]").Add(outputType).Values(),
+        FOR_ROWS_SCAN, RETURN_RESULTS,
     )
 
 def ConvertedResultQueryFunc(file, name, timeOutDuration, query, poolType, inputFields, queryResultFields, converter, outputType):
@@ -222,13 +222,13 @@ def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, poolType, 
     instructions.append(DEFER_ROWS_CLOSE)
     instructions.append(Line())
 
-    instructions.append(Id("res").Op(":=").Op("[]").Add(outputType).Values())
+    instructions.append(Id("results").Op(":=").Op("[]").Add(outputType).Values())
     instructions.append(For(Id("rows").Dot("Next").Call()).Block(
         Err().Op(":=").Id("rows").Dot("Scan").Call(*callParams2),
         IF_ERR_NOT_NIL,
-        Id("res").Op("=").Append(Id("res"), converter.Clone().Call(*callParams3)),
+        Id("results").Op("=").Append(Id("results"), converter.Clone().Call(*callParams3)),
     ))
-    instructions.append(RETURN_RES)
+    instructions.append(RETURN_RESULTS)
 
     file.Func().Id(name).Params(*funcParams).Parens(List(Op("[]").Add(outputType), Error())).Block(*instructions)
 
