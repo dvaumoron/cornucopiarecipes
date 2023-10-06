@@ -34,10 +34,10 @@ IF_ERR_NOT_NIL_ZERO = If(Err().Op("!=").Nil()).Block(
     Return(0, Err()),
 )
 
-def computeQueryParams(query, poolType, inputTypes):
+def computeQueryParams(query, poolType, inputFields):
     funcParams = [Id("pool").Add(poolType), Id("ctx").Qual("context", "Context")]
     callParams = [Id("ctx"), query]
-    for k, v in inputTypes.items():
+    for k, v in inputFields.items():
         funcParams.append(Id(k).Add(v))
         callParams.append(Qual("database/sql", "Named").Call(k, Id(k)))
     return funcParams, callParams
@@ -45,79 +45,105 @@ def computeQueryParams(query, poolType, inputTypes):
 def addTimeOut(timeOutDuration):
     return List(Id("ctx"), Id("cancel")).Op(":=").Qual("context", "WithTimeout").Call(Id("ctx"), timeOutDuration)
 
-def createQuery(typeName, fields):
+def computeConvertParams(queryResultFields, instructions):
+    pointedParams = []
+    callParams = []
+    for k, v in queryResultFields.items():
+        k += "Temp"
+        instructions.append(Var().Id(k).Add(v))
+        pointedParams.append(Op("&").Id(k))
+        callParams.append(Id(k))
+    return pointedParams, callParams
+
+def insertQuery(typeDesc):
     queryBuilder = ["insert into "]
-    queryBuilder.append(typeName.lower())
-    queryBuilder.append("s(")
+    queryBuilder.append(typeDesc["tableName"])
+    queryBuilder.append("(")
     first = True
-    for field in fields:
+    fieldItems = typeDesc["fields"].items()
+    for fieldName, fieldData in fieldItems:
         if first:
             first = False
         else:
             queryBuilder.append(", ")
-        queryBuilder.append(field.lower())
+        queryBuilder.append(fieldData[1])
     queryBuilder.append(") values(")
     first = True
-    for field in fields:
+    for fieldName, fieldData in fieldItems:
         if first:
             first = False
         else:
             queryBuilder.append(", ")
         queryBuilder.append(":")
-        queryBuilder.append(field)
+        queryBuilder.append(fieldName)
     queryBuilder.append(");")
     return "".join(queryBuilder)
 
-def readQuery(typeName, fields, primaryKey):
-    primaryKey = primaryKey.lower()
+def SelectQuery(typeDesc, alias="o"):
     queryBuilder = ["select "]
     first = True
-    for field in fields:
+    for fieldName, fieldData in typeDesc["fields"].items():
         if first:
             first = False
         else:
             queryBuilder.append(", ")
-        queryBuilder.append("o.")
-        queryBuilder.append(field.lower())
+        queryBuilder.append(alias)
+        queryBuilder.append(".")
+        queryBuilder.append(fieldData[1])
     queryBuilder.append(" from ")
-    queryBuilder.append(typeName.lower())
-    queryBuilder.append("s as o where o.")
-    queryBuilder.append(primaryKey)
+    queryBuilder.append(typeDesc["tableName"])
+    queryBuilder.append(" as ")
+    queryBuilder.append(alias)
+    return queryBuilder
+
+
+def selectByPrimaryKeyQuery(typeDesc, alias="o"):
+    pkName = typeDesc["primaryKey"]
+
+    queryBuilder = SelectQuery(typeDesc, alias)
+    queryBuilder.append(" where ")
+    queryBuilder.append(alias)
+    queryBuilder.append(".")
+    queryBuilder.append(typeDesc["fields"][pkName][1])
     queryBuilder.append(" = :")
-    queryBuilder.append(primaryKey)
+    queryBuilder.append(pkName)
     queryBuilder.append(";")
     return "".join(queryBuilder)
 
-def updateQuery(typeName, fields, primaryKey):
+def updateQuery(typeDesc):
+    pkName = typeDesc["primaryKey"]
+    fields = typeDesc["fields"]
+
     queryBuilder = ["update "]
-    queryBuilder.append(typeName.lower())
-    queryBuilder.append("s set ")
+    queryBuilder.append(typeDesc["tableName"])
+    queryBuilder.append(" set ")
     first = True
-    for field in fields:
-        if field == primaryKey:
+    for fieldName, fieldData in fields.items():
+        if fieldName == pkName:
             continue
         if first:
             first = False
         else:
             queryBuilder.append(", ")
-        queryBuilder.append(field.lower())
+        queryBuilder.append(fieldData[1])
         queryBuilder.append(" = :")
-        queryBuilder.append(field)
+        queryBuilder.append(fieldName)
     queryBuilder.append(" where ")
-    queryBuilder.append(primaryKey.lower())
+    queryBuilder.append(fields[pkName][1])
     queryBuilder.append(" = :")
-    queryBuilder.append(primaryKey)
+    queryBuilder.append(pkName)
     queryBuilder.append(";")
     return "".join(queryBuilder)
 
-def deleteQuery(typeName, primaryKey):
-    primaryKey = primaryKey.lower()
+def deleteQuery(typeDesc):
+    pkName = typeDesc["primaryKey"]
+
     queryBuilder = ["delete from "]
-    queryBuilder.append(typeName.lower())
-    queryBuilder.append("s where ")
-    queryBuilder.append(primaryKey)
+    queryBuilder.append(typeDesc["tableName"])
+    queryBuilder.append(" where ")
+    queryBuilder.append(typeDesc["fields"][pkName][1])
     queryBuilder.append(" = :")
-    queryBuilder.append(primaryKey)
+    queryBuilder.append(pkName)
     queryBuilder.append(";")
     return "".join(queryBuilder)
 
@@ -136,8 +162,8 @@ def ExecerContext(file, name):
         EXEC_METHOD,
     )
 
-def SimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inputTypes, outputType):
-    funcParams, callParams = computeQueryParams(query, poolType, inputTypes)
+def SimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inputFields, outputType):
+    funcParams, callParams = computeQueryParams(query, poolType, inputFields)
 
     file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(
         addTimeOut(timeOutDuration),
@@ -148,8 +174,8 @@ def SimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inputTyp
         Return(Id("value"), Err()),
     )
 
-def MultiSimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inputTypes, outputType):
-    funcParams, callParams = computeQueryParams(query, poolType, inputTypes)
+def MultiSimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inputFields, outputType):
+    funcParams, callParams = computeQueryParams(query, poolType, inputFields)
 
     file.Func().Id(name).Params(*funcParams).Parens(List(Op("[]").Add(outputType), Error())).Block(
         addTimeOut(timeOutDuration),
@@ -164,8 +190,8 @@ def MultiSimpleResultQueryFunc(file, name, timeOutDuration, query, poolType, inp
         FOR_ROWS_SCAN, RETURN_RES,
     )
 
-def ConvertedResultQueryFunc(file, name, timeOutDuration, query, poolType, inputTypes, queryResultType, converter, outputType):
-    funcParams, callParams = computeQueryParams(query, poolType, inputTypes)
+def ConvertedResultQueryFunc(file, name, timeOutDuration, query, poolType, inputFields, queryResultFields, converter, outputType):
+    funcParams, callParams = computeQueryParams(query, poolType, inputFields)
 
     instructions =  [
         addTimeOut(timeOutDuration),
@@ -173,20 +199,15 @@ def ConvertedResultQueryFunc(file, name, timeOutDuration, query, poolType, input
         Line(),
     ]
 
-    callParams2 = []
-    callParams3 = []
-    for k, v in queryResultType.items():
-        instructions.append(Var().Id(k).Add(v))
-        callParams2.append(Op("&").Id(k))
-        callParams3.append(Id(k))
+    callParams2, callParams3 = computeConvertParams(queryResultFields, instructions)
 
     instructions.append(Err().Op(":=").Id("pool").Dot("QueryRowContext").Call(*callParams).Dot("Scan").Call(*callParams2))
     instructions.append(Return(converter.Clone().Call(*callParams3), Err()))
 
     file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(*instructions)
 
-def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, poolType, inputTypes, queryResultType, converter, outputType):
-    funcParams, callParams = computeQueryParams(query, poolType, inputTypes)
+def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, poolType, inputFields, queryResultFields, converter, outputType):
+    funcParams, callParams = computeQueryParams(query, poolType, inputFields)
 
     instructions =  [
         addTimeOut(timeOutDuration),
@@ -194,12 +215,7 @@ def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, poolType, 
         Line(),
     ]
 
-    callParams2 = []
-    callParams3 = []
-    for k, v in queryResultType.items():
-        instructions.append(Var().Id(k).Add(v))
-        callParams2.append(Op("&").Id(k))
-        callParams3.append(Id(k))
+    callParams2, callParams3 = computeConvertParams(queryResultFields, instructions)
 
     instructions.append(List(Id("rows"), Err()).Op(":=").Id("pool").Dot("QueryContext").Call(*callParams))
     instructions.append(IF_ERR_NOT_NIL)
@@ -216,8 +232,8 @@ def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, poolType, 
 
     file.Func().Id(name).Params(*funcParams).Parens(List(Op("[]").Add(outputType), Error())).Block(*instructions)
 
-def ExecFunc(file, name, timeOutDuration, query, poolType, inputTypes):
-    funcParams, callParams = computeQueryParams(query, poolType, inputTypes)
+def ExecFunc(file, name, timeOutDuration, query, poolType, inputFields):
+    funcParams, callParams = computeQueryParams(query, poolType, inputFields)
 
     file.Func().Id(name).Params(*funcParams).Parens(List(Int64(), Error())).Block(
         addTimeOut(timeOutDuration),
@@ -229,23 +245,34 @@ def ExecFunc(file, name, timeOutDuration, query, poolType, inputTypes):
         Return(Id("result").Dot("RowsAffected").Call()),
     )
 
-def CRUD(file, typeName, *, pointer=False, fields, primaryKey, timeOutDuration, execerContext, rowQueryerContext):
-    StructType(file, typeName, namedFields=fields)
+
+def GetNamedFields(typeDesc):
+    namedFields = {}
+    for fiedName, fieldData in  typeDesc["fields"].items():
+        namedFields[fiedName] = fieldData[0]
+    return namedFields
+
+def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, execerContext, rowQueryerContext):
+    typeName = typeDesc["typeName"] 
+    primaryKey = typeDesc["primaryKey"] 
+    namedFields = GetNamedFields(typeDesc)
+    
+    StructType(file, typeName, namedFields=namedFields)
 
     if pointer:
         builderName = "New" + typeName
         outputType = Op("*").Id(typeName)
-        NewFunc(file, builderName, fields, Id(typeName))
+        NewFunc(file, builderName, namedFields, Id(typeName))
     else:
         builderName = "Make" + typeName
         outputType = Id(typeName)
-        MakeFunc(file, builderName, fields, outputType)    
+        MakeFunc(file, builderName, namedFields, outputType)    
 
     file.Line()
 
     createName = "create" + typeName
     createParams = [Id("pool"), Id("ctx")]
-    for field in fields:
+    for field in namedFields:
         createParams.append(Id("o").Dot(field))
 
     file.Func().Parens(Id("o").Add(outputType)).Id("Create").Params(Id("pool").Add(execerContext), Id("ctx").Qual("context", "Context")).Error().Block(
@@ -255,12 +282,12 @@ def CRUD(file, typeName, *, pointer=False, fields, primaryKey, timeOutDuration, 
 
     file.Line()
 
-    primaryField = {primaryKey.lower(): fields[primaryKey]}
+    primaryField = {primaryKey: namedFields[primaryKey]}
 
     ConvertedResultQueryFunc(
         file, name="Read" + typeName, timeOutDuration=timeOutDuration,
-        query=readQuery(typeName, fields, primaryKey),
-        poolType=rowQueryerContext, inputTypes=primaryField, queryResultType=fields,
+        query=selectByPrimaryKeyQuery(typeDesc),
+        poolType=rowQueryerContext, inputFields=primaryField, queryResultFields=namedFields,
         converter=Id(builderName), outputType=outputType,
     )
 
@@ -286,24 +313,24 @@ def CRUD(file, typeName, *, pointer=False, fields, primaryKey, timeOutDuration, 
 
     ExecFunc(
         file, name=createName, timeOutDuration=timeOutDuration,
-        query=createQuery(typeName, fields),
-        poolType=execerContext, inputTypes=fields,
+        query=insertQuery(typeDesc),
+        poolType=execerContext, inputFields=namedFields,
     )
 
     file.Line()
 
     ExecFunc(
         file, name=updateName, timeOutDuration=timeOutDuration,
-        query=updateQuery(typeName, fields, primaryKey),
-        poolType=execerContext, inputTypes=fields,
+        query=updateQuery(typeDesc),
+        poolType=execerContext, inputFields=namedFields,
     )
 
     file.Line()
 
     ExecFunc(
         file, name=deleteName, timeOutDuration=timeOutDuration,
-        query=deleteQuery(typeName, primaryKey),
-        poolType=execerContext, inputTypes=primaryField,
+        query=deleteQuery(typeDesc),
+        poolType=execerContext, inputFields=primaryField,
     )
 
     return outputType, builderName
