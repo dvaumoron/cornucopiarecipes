@@ -86,7 +86,7 @@ def insertQuery(typeDesc):
     queryBuilder.append(");")
     return "".join(queryBuilder)
 
-def SelectQuery(typeDesc, *whereClauseParts, alias="o"):
+def SelectQuery(typeDesc, *whereClauseParts, alias="o", joins={}):
     queryBuilder = ["select "]
     first = True
     for fieldName, fieldData in typeDesc[FIELDS].items():
@@ -101,6 +101,11 @@ def SelectQuery(typeDesc, *whereClauseParts, alias="o"):
     queryBuilder.append(typeDesc[TABLE_NAME])
     queryBuilder.append(" as ")
     queryBuilder.append(alias)
+    for tableName, tableAlias in joins.items():
+        queryBuilder.append(", ")
+        queryBuilder.append(tableName)
+        queryBuilder.append(" as ")
+        queryBuilder.append(tableAlias)
     if whereClauseParts:
         queryBuilder.append(" where ")
         queryBuilder.extend(whereClauseParts)
@@ -147,6 +152,9 @@ def deleteQuery(typeDesc):
     queryBuilder.append(pkName)
     queryBuilder.append(";")
     return "".join(queryBuilder)
+
+def ConstTimeoutSec(file, sec):
+    file.Const().Id("timeout").Op("=").Qual("time", "Duration").Call(sec).Op("*").Qual("time", "Second")
 
 def QueryerContext(file, name):
     file.Type().Id(name).Interface(
