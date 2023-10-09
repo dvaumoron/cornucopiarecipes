@@ -16,6 +16,13 @@
 
 load("dvaumoron/main.crn", "StructType", "MakeFunc", "NewFunc")
 
+# type description fields
+TYPE_NAME = "typeName"
+TABLE_NAME = "tableName"
+PRIMARY_KEY = "primaryKey"
+FIELDS = "fields"
+
+# internal constant
 QUERY_METHOD = Id("QueryContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Parens(List(Op("*").Qual("database/sql", "Rows"), Error()))
 QUERY_ROW_METHOD = Id("QueryRowContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Op("*").Qual("database/sql", "Row")
 EXEC_METHOD = Id("ExecContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Parens(List(Qual("database/sql", "Result"), Error()))
@@ -57,10 +64,10 @@ def computeConvertParams(queryResultFields, instructions):
 
 def insertQuery(typeDesc):
     queryBuilder = ["insert into "]
-    queryBuilder.append(typeDesc["tableName"])
+    queryBuilder.append(typeDesc[TABLE_NAME])
     queryBuilder.append("(")
     first = True
-    fieldItems = typeDesc["fields"].items()
+    fieldItems = typeDesc[FIELDS].items()
     for fieldName, fieldData in fieldItems:
         if first:
             first = False
@@ -79,10 +86,10 @@ def insertQuery(typeDesc):
     queryBuilder.append(");")
     return "".join(queryBuilder)
 
-def SelectQuery(typeDesc, alias="o"):
+def SelectQuery(typeDesc, *whereClauseParts, alias="o"):
     queryBuilder = ["select "]
     first = True
-    for fieldName, fieldData in typeDesc["fields"].items():
+    for fieldName, fieldData in typeDesc[FIELDS].items():
         if first:
             first = False
         else:
@@ -91,31 +98,25 @@ def SelectQuery(typeDesc, alias="o"):
         queryBuilder.append(".")
         queryBuilder.append(fieldData[1])
     queryBuilder.append(" from ")
-    queryBuilder.append(typeDesc["tableName"])
+    queryBuilder.append(typeDesc[TABLE_NAME])
     queryBuilder.append(" as ")
     queryBuilder.append(alias)
-    return queryBuilder
-
-
-def selectByPrimaryKeyQuery(typeDesc, alias="o"):
-    pkName = typeDesc["primaryKey"]
-
-    queryBuilder = SelectQuery(typeDesc, alias)
-    queryBuilder.append(" where ")
-    queryBuilder.append(alias)
-    queryBuilder.append(".")
-    queryBuilder.append(typeDesc["fields"][pkName][1])
-    queryBuilder.append(" = :")
-    queryBuilder.append(pkName)
+    if whereClauseParts:
+        queryBuilder.append(" where ")
+        queryBuilder.extend(whereClauseParts)
     queryBuilder.append(";")
     return "".join(queryBuilder)
 
+def selectByPrimaryKeyQuery(typeDesc, alias="o"):
+    pkName = typeDesc[PRIMARY_KEY]
+    return SelectQuery(typeDesc, alias, ".", typeDesc[FIELDS][pkName][1], " = :", pkName, alias=alias)
+
 def updateQuery(typeDesc):
-    pkName = typeDesc["primaryKey"]
-    fields = typeDesc["fields"]
+    pkName = typeDesc[PRIMARY_KEY]
+    fields = typeDesc[FIELDS]
 
     queryBuilder = ["update "]
-    queryBuilder.append(typeDesc["tableName"])
+    queryBuilder.append(typeDesc[TABLE_NAME])
     queryBuilder.append(" set ")
     first = True
     for fieldName, fieldData in fields.items():
@@ -136,12 +137,12 @@ def updateQuery(typeDesc):
     return "".join(queryBuilder)
 
 def deleteQuery(typeDesc):
-    pkName = typeDesc["primaryKey"]
+    pkName = typeDesc[PRIMARY_KEY]
 
     queryBuilder = ["delete from "]
-    queryBuilder.append(typeDesc["tableName"])
+    queryBuilder.append(typeDesc[TABLE_NAME])
     queryBuilder.append(" where ")
-    queryBuilder.append(typeDesc["fields"][pkName][1])
+    queryBuilder.append(typeDesc[FIELDS][pkName][1])
     queryBuilder.append(" = :")
     queryBuilder.append(pkName)
     queryBuilder.append(";")
@@ -245,16 +246,43 @@ def ExecFunc(file, name, timeOutDuration, query, poolType, inputFields):
         Return(Id("result").Dot("RowsAffected").Call()),
     )
 
+def camelToUnderscore(s):
+    res = []
+    first = True
+    for c in s.codepoints():
+        if c.isupper():
+            if not first:
+                res.append("_")
+            res.append(c.lower())
+        else:
+            res.append(c)
+        first = False
+    return "".join(res)
+
+def BuildConvTypeDesc(typeName, fields):
+    primaryKey = None
+    computedFields = {}
+    for k, v in fields.items():
+        if primaryKey == None:
+            primaryKey = k
+        computedFields[k] = [v, camelToUnderscore(k)]
+
+    return {
+        TYPE_NAME: typeName,
+        TABLE_NAME: camelToUnderscore(typeName) + "s",
+        PRIMARY_KEY: primaryKey,
+        FIELDS: computedFields,
+    }
 
 def GetNamedFields(typeDesc):
     namedFields = {}
-    for fiedName, fieldData in  typeDesc["fields"].items():
+    for fiedName, fieldData in  typeDesc[FIELDS].items():
         namedFields[fiedName] = fieldData[0]
     return namedFields
 
 def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, execerContext, rowQueryerContext):
-    typeName = typeDesc["typeName"] 
-    primaryKey = typeDesc["primaryKey"] 
+    typeName = typeDesc[TYPE_NAME] 
+    primaryKey = typeDesc[PRIMARY_KEY] 
     namedFields = GetNamedFields(typeDesc)
     
     StructType(file, typeName, namedFields=namedFields)
