@@ -18,7 +18,6 @@ def StructType(file, name, *, embeddedFields=[], namedFields={}):
     fields = list(embeddedFields)
     for k, v in namedFields.items():
         fields.append(Id(k).Add(v))
-
     file.Type().Id(name).Struct(*fields)
 
 def computeTypeParams(inputTypes):
