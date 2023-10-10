@@ -45,6 +45,15 @@ RETURN_RESULTS = Return(Id("results"), Nil())
 IF_ERR_NOT_NIL_ZERO = If(Err().Op("!=").Nil()).Block(
     Return(0, Err()),
 )
+
+DECLARE_START_INDEX = List(Id("startIndex"), Id("_")).Op(":=").Qual("strconv","Atoi").Call(Id("placeholder").Index(1, Empty()))
+DECLARE_PLACEHOLDERS = Id("placeholders").Op(":=").Make(Index().String(), 0, Id(size))
+AUGMENT_SIZE_WITH_START_INDEX = Id("size").Op("+=").Id("startIndex")
+FOR_START_INDEX = For(Id("i").Op(":=").Id("startIndex"), Id("i").Op("<").Id("size"), Id("i").Op("++")).Block(
+    Id("placeholders").Op("=").Append(Id("placeholders"), Lit("$").Op("+").Qual("strconv", "Itoa").Call(Id("i")))
+)
+RETURN_REPLACE_QUERY = Return(Qual("strings", "ReplaceAll").Call(Id("query"), Id("placeholder"), Qual("strings", "Join").Call(Id("placeholders"), ", ")))
+
 DECLARE_RESULTS_FROM_ARGS = Id("results").Op(":=").Make(Index().Any(), 0, Len(Id("args")))
 FOR_RANGE_ARGS = For(List(Id("_"), Id("arg")).Op(":=").Range().Id("args")).Block(
     Id("results").Op("=").Append(Id("results"), Id("arg")),
@@ -231,8 +240,7 @@ def DeclareDBInterfaces(file, execerName, queryerName, rowQueryerName):
 
 def DeclareVarArgsFilter(file, name):
     file.Func().Id(name).Params(Id("query").String(), Id("placeholder").String(), Id("size").Int() ).String().Block(
-        # TODO
-        Return(Id("query"))
+        DECLARE_START_INDEX, DECLARE_PLACEHOLDERS, AUGMENT_SIZE_WITH_START_INDEX, FOR_START_INDEX, RETURN_REPLACE_QUERY,
     )
 
 def DeclareAnyConverter(file, name):
