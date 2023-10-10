@@ -87,7 +87,7 @@ def computeQueryParams(query, poolType, inputFields, varArgsFilter, anyConverter
             queryArgsDeclarations.append(Id("size").Op(":=").Len(Id(lastParamName)))
             queryDeclaration.Id(varArgsFilter).Call(filteredQuery, dollarNumber, Id("size"))
             queryArgsDeclarations.append(Id("queryArgs").Op(":=").Make(Index().Any(), 0, Id(size)))
-            queryArgsDeclarations.append(Id("queryArgs").Op("=").Append(Id("queryArgs"), *queryArgsParams[:-1])
+            queryArgsDeclarations.append(Id("queryArgs").Op("=").Append(Id("queryArgs"), *queryArgsParams[:-1]))
             queryArgsDeclarations.append(Id("queryArgs").Op("=").Append(Id("queryArgs"), Id(anyConverter).Call(Id(lastParamName)).Op("..."))
         elif lastParamName:
             queryDeclaration.Id(varArgsFilter).Call(filteredQuery, "$1", Len(Id(lastParamName))))
