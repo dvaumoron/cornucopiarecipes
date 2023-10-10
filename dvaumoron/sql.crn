@@ -47,11 +47,15 @@ IF_ERR_NOT_NIL_ZERO = If(Err().Op("!=").Nil()).Block(
 )
 
 def computeQueryParams(query, poolType, inputFields):
+    filteredQuery = query
+    for i, k in enumerate(inputFields):
+        filteredQuery = filteredQuery.replace("@" + k, "$" + str(i+1))
+
     funcParams = [Id("pool").Add(poolType), Id("ctx").Qual("context", "Context")]
-    callParams = [Id("ctx"), query]
+    callParams = [Id("ctx"), filteredQuery]
     for k, v in inputFields.items():
         funcParams.append(Id(k).Add(v))
-        callParams.append(Qual("database/sql", "Named").Call(k, Id(k)))
+        callParams.append(Id(k))
     return funcParams, callParams
 
 def addTimeOut(timeOutDuration):
@@ -86,7 +90,7 @@ def insertQuery(typeDesc):
             first = False
         else:
             queryBuilder.append(", ")
-        queryBuilder.append(":")
+        queryBuilder.append("@")
         queryBuilder.append(fieldName)
     queryBuilder.append(");")
     return "".join(queryBuilder)
@@ -119,7 +123,7 @@ def SelectQuery(typeDesc, *whereClauseParts, alias="o", joins={}):
 
 def selectByPrimaryKeyQuery(typeDesc, alias="o"):
     pkName = typeDesc[PRIMARY_KEY]
-    return SelectQuery(typeDesc, alias, ".", typeDesc[FIELDS][pkName][1], " = :", pkName, alias=alias)
+    return SelectQuery(typeDesc, alias, ".", typeDesc[FIELDS][pkName][1], " = @", pkName, alias=alias)
 
 def updateQuery(typeDesc):
     pkName = typeDesc[PRIMARY_KEY]
@@ -137,11 +141,11 @@ def updateQuery(typeDesc):
         else:
             queryBuilder.append(", ")
         queryBuilder.append(fieldData[1])
-        queryBuilder.append(" = :")
+        queryBuilder.append(" = @")
         queryBuilder.append(fieldName)
     queryBuilder.append(" where ")
     queryBuilder.append(fields[pkName][1])
-    queryBuilder.append(" = :")
+    queryBuilder.append(" = @")
     queryBuilder.append(pkName)
     queryBuilder.append(";")
     return "".join(queryBuilder)
@@ -153,7 +157,7 @@ def deleteQuery(typeDesc):
     queryBuilder.append(typeDesc[TABLE_NAME])
     queryBuilder.append(" where ")
     queryBuilder.append(typeDesc[FIELDS][pkName][1])
-    queryBuilder.append(" = :")
+    queryBuilder.append(" = @")
     queryBuilder.append(pkName)
     queryBuilder.append(";")
     return "".join(queryBuilder)
