@@ -327,7 +327,7 @@ def ConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, q
 
     instructions.extend([
         Err().Op(":=").Id("pool").Dot("QueryRowContext").Call(*callParams).Dot("Scan").Call(*callParams2),
-        Return(converter.Clone().Call(*callParams3), Err()),
+        Return(Id(converter).Call(*callParams3), Err()),
     ])
 
     file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(*instructions)
@@ -355,7 +355,7 @@ def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfac
         For(Id("rows").Dot("Next").Call()).Block(
             Err().Op(":=").Id("rows").Dot("Scan").Call(*callParams2),
             IF_ERR_NOT_NIL,
-            Id("results").Op("=").Append(Id("results"), converter.Clone().Call(*callParams3)),
+            Id("results").Op("=").Append(Id("results"), Id(converter).Call(*callParams3)),
         ),
         RETURN_RESULTS,
     ])
@@ -467,7 +467,7 @@ def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
         file, name="Read" + typeName, timeOutDuration=timeOutDuration,
         query=selectByPrimaryKeyQuery(typeDesc),
         dbInterfaces=dbInterfaces, inputFields=primaryField, queryResultFields=namedFields,
-        converter=Id(builderName), outputType=outputType,
+        converter=builderName, outputType=outputType,
     )
 
     file.Line()
