@@ -402,9 +402,10 @@ def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
     execerContext = dbInterfaces[EXECER_CONTEXT]
 
     typeName = typeDesc[TYPE_NAME] 
-    primaryKey = typeDesc[PRIMARY_KEY] 
+    primaryKey = typeDesc[PRIMARY_KEY]
+    skipPK = typeDesc[AUTO_KEY]
     namedFields = GetNamedFields(typeDesc)
-    
+
     StructType(file, typeName, namedFields=namedFields)
 
     if pointer:
@@ -419,9 +420,22 @@ def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
     file.Line()
 
     createName = "create" + typeName
-    createParams = [Id("pool"), Id("ctx")]
-    for field in namedFields:
-        createParams.append(Id("o").Dot(field))
+    allParams = [Id("pool"), Id("ctx")]
+    if skipPK:
+        createFields = {}
+        createParams = [Id("pool"), Id("ctx")]                
+        for fieldName, fieldType in namedFields.items():
+            dotedField = Id("o").Dot(fieldName)
+            allParams.append(dotedField)
+            if fieldName != primaryKey:
+                createParams.append(dotedField)
+                createFields[fieldName] = fieldType
+    else:
+        createFields = namedFields
+
+        for fieldName in namedFields:
+            allParams.append(Id("o").Dot(fieldName))
+        createParams = allParams
 
     file.Func().Parens(Id("o").Add(outputType)).Id("Create").Params(Id("pool").Add(execerContext), Id("ctx").Qual("context", "Context")).Error().Block(
         List(Id("_"), Err()).Op(":=").Id(createName).Call(*createParams),
@@ -444,7 +458,7 @@ def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
     updateName = "update" + typeName
 
     file.Func().Parens(Id("o").Add(outputType)).Id("Update").Params(Id("pool").Add(execerContext), Id("ctx").Qual("context", "Context")).Error().Block(
-        List(Id("_"), Err()).Op(":=").Id(updateName).Call(*createParams),
+        List(Id("_"), Err()).Op(":=").Id(updateName).Call(*allParams),
         Return(Err())
     )
 
@@ -462,7 +476,7 @@ def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
     ExecFunc(
         file, name=createName, timeOutDuration=timeOutDuration,
         query=insertQuery(typeDesc),
-        dbInterfaces=dbInterfaces, inputFields=namedFields,
+        dbInterfaces=dbInterfaces, inputFields=createFields,
     )
 
     file.Line()
