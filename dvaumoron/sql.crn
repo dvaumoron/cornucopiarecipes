@@ -28,6 +28,10 @@ EXECER_CONTEXT = "execerContext"
 QUERYER_CONTEXT = "queryerContext"
 ROW_QUERYER_CONTEXT = "rowQueryerContext"
 
+# varArgsUtil fields
+VARARGS_FILTER = "varArgsFilter"
+ANY_CONVERTER = "anyConverter"
+
 # internal constant
 QUERY_METHOD = Id("QueryContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Parens(List(Op("*").Qual("database/sql", "Rows"), Error()))
 QUERY_ROW_METHOD = Id("QueryRowContext").Call(Id("ctx").Qual("context", "Context"), Id("query").String(), Id("args").Op("...").Any()).Op("*").Qual("database/sql", "Row")
@@ -62,7 +66,10 @@ FOR_RANGE_ARGS = For(List(Id("_"), Id("arg")).Op(":=").Range().Id("args")).Block
 )
 RETURN_ONLY_RESULTS = Return(Id("results"))
 
-def computeQueryParams(query, poolType, inputFields, varArgsFilter, anyConverter):
+def computeQueryParams(query, poolType, inputFields, varArgsUtil):
+    varArgsFilter = varArgsUtil.get(VARARGS_FILTER)
+    anyConverter = varArgsUtil.get(ANY_CONVERTER)
+
     filteredQuery = query
     dollarNumber = ""
     for i, k in enumerate(inputFields):
@@ -256,8 +263,17 @@ def DeclareAnyConverter(file, name):
         DECLARE_RESULTS_FROM_ARGS, FOR_RANGE_ARGS, RETURN_ONLY_RESULTS,
     )
 
-def SimpleResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, outputType, inputFields={}, varArgsFilter="", anyConverter=""):
-    funcParams, callParams, queryDeclaration, queryArgsDeclarations = computeQueryParams(query, dbInterfaces[ROW_QUERYER_CONTEXT], inputFields, varArgsFilter, anyConverter)
+def DeclareVarArgsUtil(file, filterName, converterName):
+    DeclareVarArgsFilter(file, filterName)
+    file.Line()
+    DeclareAnyConverter(file, converterName)
+    return {
+        VARARGS_FILTER: filterName,
+        ANY_CONVERTER: converterName,
+    }
+
+def SimpleResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, outputType, inputFields={}, varArgsUtil={}):
+    funcParams, callParams, queryDeclaration, queryArgsDeclarations = computeQueryParams(query, dbInterfaces[ROW_QUERYER_CONTEXT], inputFields, varArgsUtil)
 
     instructions = [
         addTimeOut(timeOutDuration),
@@ -274,8 +290,8 @@ def SimpleResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, outp
 
     file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(*instructions)
 
-def MultiSimpleResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, outputType, inputFields={}, varArgsFilter="", anyConverter=""):
-    funcParams, callParams, queryDeclaration, queryArgsDeclarations = computeQueryParams(query, dbInterfaces[QUERYER_CONTEXT], inputFields, varArgsFilter, anyConverter)
+def MultiSimpleResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, outputType, inputFields={}, varArgsUtil={}):
+    funcParams, callParams, queryDeclaration, queryArgsDeclarations = computeQueryParams(query, dbInterfaces[QUERYER_CONTEXT], inputFields, varArgsUtil)
 
     instructions = [
         addTimeOut(timeOutDuration),
@@ -296,8 +312,8 @@ def MultiSimpleResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces,
 
     file.Func().Id(name).Params(*funcParams).Parens(List(Index().Add(outputType), Error())).Block(*instructions)
 
-def ConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, queryResultFields, converter, outputType, inputFields={}, varArgsFilter="", anyConverter=""):
-    funcParams, callParams, queryDeclaration, queryArgsDeclarations = computeQueryParams(query, dbInterfaces[ROW_QUERYER_CONTEXT], inputFields, varArgsFilter, anyConverter)
+def ConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, queryResultFields, converter, outputType, inputFields={}, varArgsUtil={}):
+    funcParams, callParams, queryDeclaration, queryArgsDeclarations = computeQueryParams(query, dbInterfaces[ROW_QUERYER_CONTEXT], inputFields, varArgsUtil)
 
     instructions = [
         addTimeOut(timeOutDuration),
@@ -316,8 +332,8 @@ def ConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, q
 
     file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(*instructions)
 
-def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, queryResultFields, converter, outputType, inputFields={}, varArgsFilter="", anyConverter=""):
-    funcParams, callParams, queryDeclaration, queryArgsDeclarations = computeQueryParams(query, dbInterfaces[QUERYER_CONTEXT], inputFields, varArgsFilter, anyConverter)
+def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, queryResultFields, converter, outputType, inputFields={}, varArgsUtil={}):
+    funcParams, callParams, queryDeclaration, queryArgsDeclarations = computeQueryParams(query, dbInterfaces[QUERYER_CONTEXT], inputFields, varArgsUtil)
 
     instructions = [
         addTimeOut(timeOutDuration),
@@ -346,8 +362,8 @@ def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfac
 
     file.Func().Id(name).Params(*funcParams).Parens(List(Index().Add(outputType), Error())).Block(*instructions)
 
-def ExecFunc(file, name, timeOutDuration, query, dbInterfaces, inputFields={}, varArgsFilter="", anyConverter=""):
-    funcParams, callParams, queryDeclaration, queryArgsDeclarations = computeQueryParams(query, dbInterfaces[EXECER_CONTEXT], inputFields, varArgsFilter, anyConverter)
+def ExecFunc(file, name, timeOutDuration, query, dbInterfaces, inputFields={}, varArgsUtil={}):
+    funcParams, callParams, queryDeclaration, queryArgsDeclarations = computeQueryParams(query, dbInterfaces[EXECER_CONTEXT], inputFields, varArgsUtil)
 
     instructions = [
         addTimeOut(timeOutDuration),
