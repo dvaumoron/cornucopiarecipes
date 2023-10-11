@@ -42,3 +42,10 @@ def NewFunc(file, name, inputTypes, outputType):
     file.Func().Id(name).Params(*funcParams).Op("*").Add(outputType).Block(
         Return(Op("&").Add(outputType).Values(structParams))
     )
+
+def IdOrQual(s):
+    i = s.rfind(".")
+    if i == -1:
+        return Id(s)
+    else:
+        return Qual(s[:i], s[i+1:])
