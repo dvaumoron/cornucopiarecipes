@@ -422,14 +422,15 @@ def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
     createName = "create" + typeName
     allParams = [Id("pool"), Id("ctx")]
     if skipPK:
-        createFields = {}
-        createParams = [Id("pool"), Id("ctx")]                
-        for fieldName, fieldType in namedFields.items():
+        createFields = dict(namedFields)
+        createFields.pop(primaryKey)
+
+        createParams = list(allParams)
+        for fieldName in namedFields:
             dotedField = Id("o").Dot(fieldName)
             allParams.append(dotedField)
             if fieldName != primaryKey:
                 createParams.append(dotedField)
-                createFields[fieldName] = fieldType
     else:
         createFields = namedFields
 
