@@ -20,6 +20,7 @@ load("dvaumoron/main.crn", "StructType", "MakeFunc", "NewFunc")
 TYPE_NAME = "typeName"
 TABLE_NAME = "tableName"
 PRIMARY_KEY = "primaryKey"
+AUTO_KEY = "autoKey"
 FIELDS = "fields"
 
 # dbInterfaces fields
@@ -122,8 +123,12 @@ def insertQuery(typeDesc):
     queryBuilder.append(typeDesc[TABLE_NAME])
     queryBuilder.append("(")
     first = True
-    fieldItems = typeDesc[FIELDS].items()
-    for fieldName, fieldData in fieldItems:
+    fields = typeDesc[FIELDS]
+    pkName = typeDesc[PRIMARY_KEY]
+    skipPK = typeDesc[AUTO_KEY]
+    for fieldName, fieldData in fields.items():
+        if skipPK and fieldName == pkName:
+            continue
         if first:
             first = False
         else:
@@ -131,7 +136,9 @@ def insertQuery(typeDesc):
         queryBuilder.append(fieldData[1])
     queryBuilder.append(") values(")
     first = True
-    for fieldName, fieldData in fieldItems:
+    for fieldName in fields:
+        if skipPK and fieldName == pkName:
+            continue
         if first:
             first = False
         else:
@@ -381,7 +388,7 @@ def BuildConvTypeDesc(typeName, fields):
     return {
         TYPE_NAME: typeName,
         TABLE_NAME: camelToUnderscore(typeName) + "s",
-        PRIMARY_KEY: primaryKey,
+        PRIMARY_KEY: primaryKey, AUTO_KEY: True,
         FIELDS: computedFields,
     }
 
