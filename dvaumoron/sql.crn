@@ -323,11 +323,11 @@ def ConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, q
     instructions.extend(queryArgsDeclarations)
     instructions.append(queryDeclaration)
 
-    callParams2, callParams3 = computeConvertParams(queryResultFields, instructions)
+    scanParams, converterParams = computeConvertParams(queryResultFields, instructions)
 
     instructions.extend([
-        Err().Op(":=").Id("pool").Dot("QueryRowContext").Call(*callParams).Dot("Scan").Call(*callParams2),
-        Return(Id(converter).Call(*callParams3), Err()),
+        Err().Op(":=").Id("pool").Dot("QueryRowContext").Call(*callParams).Dot("Scan").Call(*scanParams),
+        Return(Id(converter).Call(*converterParams), Err()),
     ])
 
     file.Func().Id(name).Params(*funcParams).Parens(List(outputType, Error())).Block(*instructions)
@@ -343,7 +343,7 @@ def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfac
     instructions.extend(queryArgsDeclarations)
     instructions.append(queryDeclaration)
 
-    callParams2, callParams3 = computeConvertParams(queryResultFields, instructions)
+    scanParams, converterParams = computeConvertParams(queryResultFields, instructions)
 
     instructions.extend([
         List(Id("rows"), Err()).Op(":=").Id("pool").Dot("QueryContext").Call(*callParams),
@@ -353,9 +353,9 @@ def MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfac
 
         Id("results").Op(":=").Index().Add(outputType).Values(),
         For(Id("rows").Dot("Next").Call()).Block(
-            Err().Op(":=").Id("rows").Dot("Scan").Call(*callParams2),
+            Err().Op(":=").Id("rows").Dot("Scan").Call(*scanParams),
             IF_ERR_NOT_NIL,
-            Id("results").Op("=").Append(Id("results"), Id(converter).Call(*callParams3)),
+            Id("results").Op("=").Append(Id("results"), Id(converter).Call(*converterParams)),
         ),
         RETURN_RESULTS,
     ])
