@@ -14,7 +14,7 @@
 #   limitations under the License.
 #
 
-load("dvaumoron/main.crn", "StructType", "MakeFunc", "NewFunc", "IdOrQual")
+load("dvaumoron/main.crn", "StructType", "LowerFirst", "MakeFunc", "NewFunc", "IdOrQual")
 
 # type description fields
 TYPE_NAME = "typeName"
@@ -22,6 +22,8 @@ TABLE_NAME = "tableName"
 PRIMARY_KEY = "primaryKey"
 AUTO_KEY = "autoKey"
 FIELDS = "fields"
+# optional
+FIELD_TYPES = "fieldTypes"
 
 # dbInterfaces fields
 EXECER_CONTEXT = "execerContext"
@@ -72,9 +74,9 @@ def computeQueryParams(query, poolType, inputFields, varArgsUtil):
 
     filteredQuery = query
     dollarNumber = ""
-    for i, k in enumerate(inputFields):
-        dollarNumber = "$" + str(i+1)
-        filteredQuery = filteredQuery.replace("@" + k, dollarNumber)
+    for index, name in enumerate(inputFields):
+        dollarNumber = "$" + str(index+1)
+        filteredQuery = filteredQuery.replace("@" + name, dollarNumber)
 
     funcParams = [Id("pool").Add(poolType), Id("ctx").Qual("context", "Context")]
     lastParamName = ""
@@ -151,7 +153,7 @@ def insertQuery(typeDesc):
         else:
             queryBuilder.append(", ")
         queryBuilder.append("@")
-        queryBuilder.append(fieldName)
+        queryBuilder.append(LowerFirst(fieldName))
     queryBuilder.append(");")
     return "".join(queryBuilder)
 
@@ -183,7 +185,7 @@ def SelectQuery(typeDesc, *whereClauseParts, alias="o", joins={}):
 
 def selectByPrimaryKeyQuery(typeDesc, alias="o"):
     pkName = typeDesc[PRIMARY_KEY]
-    return SelectQuery(typeDesc, alias, ".", typeDesc[FIELDS][pkName][1], " = @", pkName, alias=alias)
+    return SelectQuery(typeDesc, alias, ".", typeDesc[FIELDS][pkName][1], " = @", LowerFirst(pkName), alias=alias)
 
 def updateQuery(typeDesc):
     pkName = typeDesc[PRIMARY_KEY]
@@ -202,11 +204,11 @@ def updateQuery(typeDesc):
             queryBuilder.append(", ")
         queryBuilder.append(fieldData[1])
         queryBuilder.append(" = @")
-        queryBuilder.append(fieldName)
+        queryBuilder.append(LowerFirst(fieldName))
     queryBuilder.append(" where ")
     queryBuilder.append(fields[pkName][1])
     queryBuilder.append(" = @")
-    queryBuilder.append(pkName)
+    queryBuilder.append(LowerFirst(pkName))
     queryBuilder.append(";")
     return "".join(queryBuilder)
 
@@ -218,7 +220,7 @@ def deleteQuery(typeDesc):
     queryBuilder.append(" where ")
     queryBuilder.append(typeDesc[FIELDS][pkName][1])
     queryBuilder.append(" = @")
-    queryBuilder.append(pkName)
+    queryBuilder.append(LowerFirst(pkName))
     queryBuilder.append(";")
     return "".join(queryBuilder)
 
@@ -393,26 +395,40 @@ def camelToUnderscore(s):
         first = False
     return "".join(res)
 
-def BuildConvTypeDesc(typeName, fields):
+def BuildConvTypeDesc(typeName, fieldTypes):
     primaryKey = None
     computedFields = {}
-    for k, v in fields.items():
+    for fieldName, fieldType in fieldTypes.items():
         if primaryKey == None:
-            primaryKey = k
-        computedFields[k] = [v, camelToUnderscore(k)]
+            primaryKey = fieldName
+        computedFields[fieldName] = [fieldType, camelToUnderscore(fieldName)]
 
     return {
         TYPE_NAME: typeName,
         TABLE_NAME: camelToUnderscore(typeName) + "s",
         PRIMARY_KEY: primaryKey, AUTO_KEY: True,
         FIELDS: computedFields,
+        FIELD_TYPES: fieldTypes
     }
 
-def GetNamedFields(typeDesc):
-    namedFields = {}
+def GetFieldTypes(typeDesc):
+    fieldTypes = typeDesc[FIELD_TYPES]
+    # avoid computing if it already exist
+    if fieldTypes:
+        return fieldTypes
+
+    fieldTypes = {}
     for fiedName, fieldData in  typeDesc[FIELDS].items():
-        namedFields[fiedName] = fieldData[0]
-    return namedFields
+        fieldTypes[fiedName] = fieldData[0]
+    # save in case of other calls
+    typeDesc[FIELD_TYPES] = fieldTypes
+    return fieldTypes
+
+def LowerTypes(fieldTypes):
+    res = {}
+    for fiedName, fieldType in  fieldTypes.items():
+        res[LowerFirst(fiedName)] = fieldType
+    return res
 
 def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
     execerContext = dbInterfaces[EXECER_CONTEXT]
@@ -420,37 +436,40 @@ def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
     typeName = typeDesc[TYPE_NAME] 
     primaryKey = typeDesc[PRIMARY_KEY]
     skipPK = typeDesc[AUTO_KEY]
-    namedFields = GetNamedFields(typeDesc)
+    fieldTypes = GetFieldTypes(typeDesc)
 
-    StructType(file, typeName, namedFields=namedFields)
+    StructType(file, typeName, fieldTypes=fieldTypes)
 
     if pointer:
         builderName = "New" + typeName
         outputType = Op("*").Id(typeName)
-        NewFunc(file, builderName, namedFields, Id(typeName))
+        NewFunc(file, builderName, fieldTypes, Id(typeName))
     else:
         builderName = "Make" + typeName
         outputType = Id(typeName)
-        MakeFunc(file, builderName, namedFields, outputType)    
+        MakeFunc(file, builderName, fieldTypes, outputType)    
 
     file.Line()
+
+    pkLower = LowerFirst(primaryKey)
+    lowerTypes = LowerTypes(fieldTypes)
 
     createName = "create" + typeName
     allParams = [Id("pool"), Id("ctx")]
     if skipPK:
-        createFields = dict(namedFields)
-        createFields.pop(primaryKey)
+        createFields = dict(lowerTypes)
+        createFields.pop(pkLower)
 
         createParams = list(allParams)
-        for fieldName in namedFields:
+        for fieldName in fieldTypes:
             dotedField = Id("o").Dot(fieldName)
             allParams.append(dotedField)
             if fieldName != primaryKey:
                 createParams.append(dotedField)
     else:
-        createFields = namedFields
+        createFields = lowerTypes
 
-        for fieldName in namedFields:
+        for fieldName in fieldTypes:
             allParams.append(Id("o").Dot(fieldName))
         createParams = allParams
 
@@ -461,12 +480,12 @@ def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
 
     file.Line()
 
-    primaryField = {primaryKey: namedFields[primaryKey]}
+    primaryField = {pkLower: fieldTypes[primaryKey]}
 
     ConvertedResultQueryFunc(
         file, name="Read" + typeName, timeOutDuration=timeOutDuration,
         query=selectByPrimaryKeyQuery(typeDesc),
-        dbInterfaces=dbInterfaces, inputFields=primaryField, queryResultFields=namedFields,
+        dbInterfaces=dbInterfaces, inputFields=primaryField, queryResultFields=lowerTypes,
         converter=builderName, outputType=outputType,
     )
 
@@ -501,7 +520,7 @@ def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
     ExecFunc(
         file, name=updateName, timeOutDuration=timeOutDuration,
         query=updateQuery(typeDesc),
-        dbInterfaces=dbInterfaces, inputFields=namedFields,
+        dbInterfaces=dbInterfaces, inputFields=lowerTypes,
     )
 
     file.Line()

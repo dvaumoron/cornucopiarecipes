@@ -14,30 +14,35 @@
 #   limitations under the License.
 #
 
-def StructType(file, name, *, embeddedFields=[], namedFields={}):
+def StructType(file, name, *, embeddedFields=[], fieldTypes={}):
     fields = list(embeddedFields)
-    for k, v in namedFields.items():
-        fields.append(Id(k).Add(v))
+    for fieldName, fieldType in fieldTypes.items():
+        fields.append(Id(fieldName).Add(fieldType))
     file.Type().Id(name).Struct(*fields)
 
-def computeTypeParams(inputTypes):
+def LowerFirst(s):
+    cp = list(s.codepoints())
+    cp[0] = cp[0].lower()
+    return "".join(cp)
+
+def computeTypeParams(fieldTypes):
     funcParams = []
     structParams = {}
-    for k, v in inputTypes.items():
-        kLower = k.lower()
-        funcParams.append(Id(kLower).Add(v))
-        structParams[Id(k)] = Id(kLower)
+    for fieldName, fieldType in fieldTypes.items():
+        inputName = LowerFirst(fieldName)
+        funcParams.append(Id(inputName).Add(fieldType))
+        structParams[Id(fieldName)] = Id(inputName)
     return funcParams, structParams
 
-def MakeFunc(file, name, inputTypes, outputType):
-    funcParams, structParams = computeTypeParams(inputTypes)
+def MakeFunc(file, name, fieldTypes, outputType):
+    funcParams, structParams = computeTypeParams(fieldTypes)
 
     file.Func().Id(name).Params(*funcParams).Add(outputType).Block(
         Return(outputType.Clone().Values(structParams))
     )
 
-def NewFunc(file, name, inputTypes, outputType):
-    funcParams, structParams = computeTypeParams(inputTypes)
+def NewFunc(file, name, fieldTypes, outputType):
+    funcParams, structParams = computeTypeParams(fieldTypes)
 
     file.Func().Id(name).Params(*funcParams).Op("*").Add(outputType).Block(
         Return(Op("&").Add(outputType).Values(structParams))
