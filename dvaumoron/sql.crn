@@ -24,6 +24,8 @@ AUTO_KEY = "autoKey"
 FIELDS = "fields"
 # optional
 FIELD_TYPES = "fieldTypes"
+TYPE = "type"
+BUILDER = "builder"
 
 # dbInterfaces fields
 EXECER_CONTEXT = "execerContext"
@@ -425,10 +427,10 @@ def GetFieldTypes(typeDesc):
     return fieldTypes
 
 def LowerTypes(fieldTypes):
-    res = {}
+    lowerTypes = {}
     for fiedName, fieldType in  fieldTypes.items():
-        res[LowerFirst(fiedName)] = fieldType
-    return res
+        lowerTypes[LowerFirst(fiedName)] = fieldType
+    return lowerTypes
 
 def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
     execerContext = dbInterfaces[EXECER_CONTEXT]
@@ -448,8 +450,11 @@ def CRUD(file, typeDesc, *, pointer=False, timeOutDuration, dbInterfaces):
         builderName = "Make" + typeName
         outputType = Id(typeName)
         MakeFunc(file, builderName, fieldTypes, outputType)    
-
+    
     file.Line()
+
+    typeDesc[BUILDER] = builderName
+    typeDesc[TYPE] = outputType
 
     pkLower = LowerFirst(primaryKey)
     lowerTypes = LowerTypes(fieldTypes)
@@ -544,3 +549,14 @@ def ForeignKeyMethod(file, receiverType, *, multi=True, methodName, dbInterfaces
     file.Func().Parens(Id("o").Add(receiverType)).Id(methodName).Params(Id("pool").Add(poolType), Id("ctx").Qual("context", "Context")).Parens(List(outputType , Error())).Block(
         Return(Id(functionName).Call(Id("pool"), Id("ctx"), Id("o").Dot(foreignKey)))
     )
+
+def SelectQueryFunc(file, name, *, timeOutDuration, typeDesc, where, selectAlias="o", selectJoins={}, multi=True, dbInterfaces, inputFields={}, varArgsUtil={}):
+    query = SelectQuery(typeDesc, where, alias=selectAlias, joins=selectJoins)
+    queryResultFields = LowerTypes(GetFieldTypes(typeDesc))
+    converter = typeDesc[BUILDER]
+    outputType = typeDesc[TYPE]
+
+    if multi:
+        MultiConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, queryResultFields, converter, outputType, inputFields, varArgsUtil)
+    else:
+        ConvertedResultQueryFunc(file, name, timeOutDuration, query, dbInterfaces, queryResultFields, converter, outputType, inputFields, varArgsUtil)
