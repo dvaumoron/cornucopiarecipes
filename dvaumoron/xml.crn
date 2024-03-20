@@ -14,14 +14,6 @@
 #   limitations under the License.
 #
 
-def addAttributes(tagBuilder, attributes):
-    for k, v in attributes.items():
-        tagBuilder.append(" ")
-        tagBuilder.append(k)
-        tagBuilder.append("=\"")
-        tagBuilder.append(v)
-        tagBuilder.append("\"")
-
 def CreateTag(name):
     def tag(attributes, *subTags):
         return XmlTag(name, attributes, *subTags)
@@ -38,7 +30,12 @@ def SaveFile(fileName, lines):
 
 def startTag(name, attributes, autoClose):
     tagBuilder = ["<", name]
-    addAttributes(tagBuilder, attributes)
+    for k, v in attributes.items():
+        tagBuilder.append(" ")
+        tagBuilder.append(k)
+        tagBuilder.append("=\"")
+        tagBuilder.append(v)
+        tagBuilder.append("\"")
     if autoClose:
         tagBuilder.append("/")
     tagBuilder.append(">")
