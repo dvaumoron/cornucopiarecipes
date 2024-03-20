@@ -36,17 +36,16 @@ def SaveFile(fileName, lines):
         file.Line(line)
     file.Save(fileName)
 
-def startTag(name, attributes):
+def startTag(name, attributes, autoClose):
     tagBuilder = ["<", name]
-    if attributes:
-        addAttributes(tagBuilder, attributes)
-    else:
+    addAttributes(tagBuilder, attributes)
+    if autoClose:
         tagBuilder.append("/")
-    tagBuilder.append(">") 
+    tagBuilder.append(">")
     return "".join(tagBuilder)
 
 def XmlTag(name, attributes, *subTags):
-    lines = [startTag(name, attributes)]
+    lines = [startTag(name, attributes, len(subTags) == 0)]
     for subTag in subTags:
         lines.extend(subTag)
     lines.append(endTag(name))
