@@ -15,15 +15,15 @@
 #
 
 def CreateTag(name):
-    def tag(attributes, *subTag):
-        return XmlTag(name, attributes, *subTag)
+    def tag(attributes, *subTags):
+        return XmlTag(name, attributes, *subTags)
     return tag
 
 def endTag(name):
-    return "".join(["</", name, ">"]))
+    return "".join(["</", name, ">"])
 
 def SaveFile(fileName, lines):
-    file := NewTextFile()
+    file = NewTextFile()
     for line in lines:
         file.Line(line)
     file.Save(fileName)
@@ -39,11 +39,9 @@ def startTag(name, attributes):
     tagBuilder.append(">") 
     return "".join(tagBuilder)
 
-def XmlTag(name, attributes, *subTag):
-    tagContent = [startTag(name, attributes)]
-    for tag in subTag:
-        tagContent.extend(tag)
-    tagContent.append(endTag(name))
-    return tagContent
-
-
+def XmlTag(name, attributes, *subTags):
+    lines = [startTag(name, attributes)]
+    for subTag in subTags:
+        lines.extend(subTag)
+    lines.append(endTag(name))
+    return lines
