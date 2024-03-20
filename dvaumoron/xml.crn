@@ -45,8 +45,10 @@ def startTag(name, attributes, autoClose):
     return "".join(tagBuilder)
 
 def XmlTag(name, attributes, *subTags):
-    lines = [startTag(name, attributes, len(subTags) == 0)]
-    for subTag in subTags:
-        lines.extend(subTag)
-    lines.append(endTag(name))
+    autoClose = len(subTags) == 0
+    lines = [startTag(name, attributes, autoClose)]
+    if not autoClose:
+        for subTag in subTags:
+            lines.extend(subTag)
+        lines.append(endTag(name))
     return lines
