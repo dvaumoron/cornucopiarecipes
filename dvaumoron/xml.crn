@@ -17,17 +17,20 @@
 def CreateTag(name):
     end = endTag(name)
     def tag(attributes, *subTags):
-        autoClose = len(subTags) == 0
-        lines = [startTag(name, attributes, autoClose)]
-        if not autoClose:
-            for subTag in subTags:
-                lines.extend(subTag)
-            lines.append(end)
-        return lines
+        return innerXmlTag(name, attributes, end, *subTags)
     return tag
 
 def endTag(name):
     return "".join(["</", name, ">"])
+
+def innerXmlTag(name, attributes, end, *subTags):
+    autoClose = len(subTags) == 0
+    lines = [startTag(name, attributes, autoClose)]
+    if not autoClose:
+        for subTag in subTags:
+            lines.extend(subTag)
+        lines.append(end)
+    return lines
 
 def SaveFile(fileName, lines):
     file = NewTextFile()
@@ -49,10 +52,4 @@ def startTag(name, attributes, autoClose):
     return "".join(tagBuilder)
 
 def XmlTag(name, attributes, *subTags):
-    autoClose = len(subTags) == 0
-    lines = [startTag(name, attributes, autoClose)]
-    if not autoClose:
-        for subTag in subTags:
-            lines.extend(subTag)
-        lines.append(endTag(name))
-    return lines
+    return innerXmlTag(name, attributes, endTag(name), *subTags)
