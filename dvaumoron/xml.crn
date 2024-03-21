@@ -14,12 +14,6 @@
 #   limitations under the License.
 #
 
-def CreateTag(name):
-    end = endTag(name)
-    def tag(attributes, *subTags):
-        return innerXmlTag(name, attributes, end, *subTags)
-    return tag
-
 def endTag(name):
     return "".join(["</", name, ">"])
 
@@ -47,3 +41,9 @@ def startTag(name, attributes, autoClose):
 
 def XmlTag(name, attributes, *subTags):
     return innerXmlTag(name, attributes, endTag(name), *subTags)
+
+def XmlTagBuilder(name):
+    end = endTag(name)
+    def tag(attributes, *subTags):
+        return innerXmlTag(name, attributes, end, *subTags)
+    return tag
