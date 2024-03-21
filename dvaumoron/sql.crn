@@ -397,7 +397,7 @@ def camelToUnderscore(s):
         first = False
     return "".join(res)
 
-def BuildConvTypeDesc(typeName, fieldTypes):
+def BuildTypeDesc(typeName, fieldTypes):
     primaryKey = None
     computedFields = {}
     for fieldName, fieldType in fieldTypes.items():
