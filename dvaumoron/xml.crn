@@ -15,8 +15,15 @@
 #
 
 def CreateTag(name):
+    end = endTag(name)
     def tag(attributes, *subTags):
-        return XmlTag(name, attributes, *subTags)
+        autoClose = len(subTags) == 0
+        lines = [startTag(name, attributes, autoClose)]
+        if not autoClose:
+            for subTag in subTags:
+                lines.extend(subTag)
+            lines.append(end)
+        return lines
     return tag
 
 def endTag(name):
