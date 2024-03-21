@@ -32,12 +32,6 @@ def innerXmlTag(name, attributes, end, *subTags):
         lines.append(end)
     return lines
 
-def SaveFile(fileName, lines):
-    file = NewTextFile()
-    for line in lines:
-        file.Line(line)
-    file.Save(fileName)
-
 def startTag(name, attributes, autoClose):
     tagBuilder = ["<", name]
     for k, v in attributes.items():

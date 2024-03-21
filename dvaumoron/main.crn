@@ -14,17 +14,6 @@
 #   limitations under the License.
 #
 
-def StructType(file, name, *, embeddedFields=[], fieldTypes={}):
-    fields = list(embeddedFields)
-    for fieldName, fieldType in fieldTypes.items():
-        fields.append(Id(fieldName).Add(fieldType))
-    file.Type().Id(name).Struct(*fields)
-
-def LowerFirst(s):
-    cp = list(s.codepoints())
-    cp[0] = cp[0].lower()
-    return "".join(cp)
-
 def computeTypeParams(fieldTypes):
     funcParams = []
     structParams = {}
@@ -33,6 +22,18 @@ def computeTypeParams(fieldTypes):
         funcParams.append(Id(inputName).Add(fieldType))
         structParams[Id(fieldName)] = Id(inputName)
     return funcParams, structParams
+
+def IdOrQual(s):
+    i = s.rfind(".")
+    if i == -1:
+        return Id(s)
+    else:
+        return Qual(s[:i], s[i+1:])
+
+def LowerFirst(s):
+    cp = list(s.codepoints())
+    cp[0] = cp[0].lower()
+    return "".join(cp)
 
 def MakeFunc(file, name, fieldTypes, outputType):
     funcParams, structParams = computeTypeParams(fieldTypes)
@@ -48,9 +49,14 @@ def NewFunc(file, name, fieldTypes, outputType):
         Return(Op("&").Add(outputType).Values(structParams))
     )
 
-def IdOrQual(s):
-    i = s.rfind(".")
-    if i == -1:
-        return Id(s)
-    else:
-        return Qual(s[:i], s[i+1:])
+def SaveFileLines(fileName, lines):
+    file = NewTextFile()
+    for line in lines:
+        file.Line(line)
+    file.Save(fileName)
+
+def StructType(file, name, *, embeddedFields=[], fieldTypes={}):
+    fields = list(embeddedFields)
+    for fieldName, fieldType in fieldTypes.items():
+        fields.append(Id(fieldName).Add(fieldType))
+    file.Type().Id(name).Struct(*fields)
